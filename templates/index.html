@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Money Lab</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}?v=3" />
+  <link rel="mask-icon" href="{{ url_for('static', filename='favicon.svg') }}?v=3" color="#34d399" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <!-- bootstrap data from the server -->
+  <script id="bootstrap" type="application/json">
+    {
+      "sports": {{ sports|tojson }},
+      "variables": {{ variables|tojson }},
+      "weights": {{ weights|tojson }},
+      "bankroll": {{ bankroll|tojson }},
+      "has_key": {{ has_key|tojson }},
+      "storage": {{ storage|tojson }}
+    }
+  </script>
+
+  <div class="content">
+  <header class="topbar">
+    <button id="navToggle" class="nav-toggle" type="button" aria-label="menu" aria-expanded="false">☰</button>
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1>Money Lab</h1>
+        <p class="sub">Sports · Stocks · Crypto</p>
+      </div>
+    </div>
+    <nav id="mainNav" class="main-nav">
+      <button class="nav-btn active" data-section="sports" type="button">🎯 Sports Betting</button>
+      <button class="nav-btn" data-section="stocks" type="button">📈 Stocks</button>
+      <button class="nav-btn" data-section="crypto" type="button">🪙 Crypto</button>
+      <button class="nav-btn" data-section="academy" type="button">🎓 Academy</button>
+    </nav>
+    <div class="topbar-right">
+      <span id="storageTop" class="storage-badge" title="History &amp; Analytics storage backend"></span>
+      <div id="quota" class="quota"></div>
+    </div>
+  </header>
+
+  <!-- ===== Sports Betting (everything built so far) ===== -->
+  <div class="section" id="section-sports">
+
+  <!-- API key setup (shown when no key on file) -->
+  <section id="keyCard" class="card key-card hidden">
+    <h2>First-run setup</h2>
+    <p>Enter your free Odds API key (<a href="https://the-odds-api.com/" target="_blank" rel="noopener">the-odds-api.com</a>, 500 req/month). Saved locally to <code>.env</code>.</p>
+    <div class="row">
+      <input id="keyInput" type="password" placeholder="Odds API key" autocomplete="off" />
+      <button id="saveKey" class="btn primary">Save key</button>
+    </div>
+    <div id="keyMsg" class="msg"></div>
+  </section>
+
+  <!-- History & Analytics storage (Supabase, with local-JSON fallback) -->
+  <section id="storageCard" class="card key-card">
+    <div class="card-head">
+      <button id="storageToggle" class="events-title" type="button" aria-expanded="false">
+        <span class="chev">▸</span><h2>History Storage</h2>
+      </button>
+      <span id="storageBadge" class="storage-badge"></span>
+    </div>
+    <div id="storageBody" class="hidden">
+      <p class="hint">History &amp; Analytics can sync to your <b>Supabase</b> project. Without it, data stays in local JSON files. Run <code>supabase_schema.sql</code> once in your Supabase SQL editor, then paste your project URL + anon key below.</p>
+      <label>Supabase URL</label>
+      <input id="sbUrl" type="text" placeholder="https://your-project.supabase.co" autocomplete="off" />
+      <label>Supabase anon key</label>
+      <input id="sbKey" type="password" placeholder="anon public key" autocomplete="off" />
+      <button id="saveSupabase" class="btn primary" style="margin-top:14px;">Save &amp; connect</button>
+      <div id="sbMsg" class="msg"></div>
+    </div>
+  </section>
+
+  <main class="main-stack">
+    <!-- odds lookup + log a bet, and staking — a compact, wrapping top row -->
+    <div class="lookup-grid">
+      <section class="card matchup-card">
+        <h2>Look up odds &amp; log a bet</h2>
+        <label>Sport</label>
+        <select id="sport"></select>
+
+        <label>Name A</label>
+        <input id="nameA" type="text" placeholder="e.g. Boston Celtics" />
+
+        <label>Name B</label>
+        <input id="nameB" type="text" placeholder="e.g. New York Knicks" />
+
+        <button id="analyze" class="btn primary full">Fetch odds</button>
+        <div id="analyzeMsg" class="msg"></div>
+
+        <!-- manual odds entry — revealed when no odds source has the matchup -->
+        <div id="manualOdds" class="manual-odds hidden">
+          <p class="hint manual-hint">Enter American moneyline odds (e.g. <code>-150</code>, <code>+130</code>):</p>
+          <label id="manualLabelA">Odds for A</label>
+          <input id="manualOddsA" type="text" inputmode="numeric" placeholder="-150" autocomplete="off" />
+          <label id="manualLabelB">Odds for B</label>
+          <input id="manualOddsB" type="text" inputmode="numeric" placeholder="+130" autocomplete="off" />
+          <button id="analyzeManual" class="btn primary full">Use manual odds</button>
+        </div>
+      </section>
+
+      <section class="card report-card">
+        <h2>Odds &amp; Bet</h2>
+        <div id="report" class="report-empty">Enter a matchup and click <b>Fetch odds</b> to see the de-vigged line and log a bet.</div>
+      </section>
+
+      <!-- Kelly Criterion calculator -->
+      <section class="card kelly-card hidden" id="kellyCard">
+        <h2>Kelly Criterion</h2>
+        <div class="kelly-bankroll">
+          <label for="bankrollInput">Bankroll ($)</label>
+          <div class="row">
+            <input id="bankrollInput" type="number" min="0" step="50" placeholder="1000" />
+            <span id="bankrollMsg" class="hint"></span>
+          </div>
+        </div>
+        <div id="kellyBody"></div>
+      </section>
+    </div>
+
+    <!-- Edge tools — the main view -->
+    <section class="card analytics-card">
+        <h2>Your Edge Tools</h2>
+        <div class="loop-banner">
+          <span class="loop-step"><span class="loop-num">1</span> <b>Value Finder</b><br>find bets priced better than the sharp line</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step"><span class="loop-num">2</span> <b>Log a bet</b><br>record what you placed (top-left card)</span>
+          <span class="loop-arrow">→</span>
+          <span class="loop-step"><span class="loop-num">3</span> <b>Beat the Close</b><br>see if you're actually sharp</span>
+        </div>
+        <div class="tabs" id="analyticsTabs">
+          <button class="tab active" data-tab="value" type="button">① Value Finder</button>
+          <button class="tab" data-tab="bets" type="button">② Bet Log</button>
+          <button class="tab" data-tab="clv" type="button">③ Beat the Close</button>
+          <span class="tab-divider">more tools ▸</span>
+          <button class="tab" data-tab="pickem" type="button">Pick'em</button>
+          <button class="tab" data-tab="sweeps" type="button">Sweeps</button>
+          <button class="tab" data-tab="arb" type="button">Arbitrage</button>
+          <button class="tab" data-tab="promo" type="button">Matched Betting</button>
+          <span class="tab-divider">diagnostics ▸</span>
+          <button class="tab tab-adv" data-tab="backtest" type="button">Backtest</button>
+          <button class="tab tab-adv" data-tab="tune" type="button">Auto-Tune</button>
+          <button class="tab tab-adv" data-tab="cal" type="button">Calibration</button>
+          <button class="tab tab-adv" data-tab="odds" type="button">Odds Movement</button>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-odds">
+          <p class="chart-note"><b>Diagnostic.</b> Tracks how a matchup's line moved across your odds lookups. Optional — not part of the daily loop.</p>
+          <div class="chart-wrap"><canvas id="oddsChart"></canvas></div>
+          <div id="oddsNote" class="chart-note"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-bets">
+          <p class="chart-note"><b>Step 2 of the loop.</b> Every bet you log (from the top-left card) shows up here. Mark each <b>W / L / P</b> once it settles — that feeds your Beat the Close grade.</p>
+          <div id="betsTable" class="bets-table-wrap"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-cal">
+          <p class="chart-note"><b>Diagnostic.</b> When your logged bets predicted X% to win, did about X% actually win? Needs 10+ settled bets. Optional.</p>
+          <div class="chart-wrap"><canvas id="calChart"></canvas></div>
+          <div id="calNote" class="chart-note"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-backtest">
+          <p class="chart-note">
+            Replays thousands of past UFC fights through your current weights and
+            asks two honest questions: are the model's probabilities any good, and
+            would betting them have made money? Nothing here uses information from
+            after each fight — the test is fair by construction.
+          </p>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Min edge to bet
+              <input id="btEdge" type="number" min="0" max="50" step="0.5" value="2" /> %
+            </label>
+            <label class="bt-field">From
+              <input id="btFrom" type="date" />
+            </label>
+            <label class="bt-field">To
+              <input id="btTo" type="date" />
+            </label>
+            <button id="btRun" class="btn primary" type="button">Run backtest</button>
+            <span id="btMsg" class="hint"></span>
+          </div>
+          <div id="btScorecard" class="bt-scorecard"></div>
+          <div class="chart-wrap"><canvas id="btEquityChart"></canvas></div>
+          <div id="btEquityNote" class="chart-note"></div>
+          <div class="chart-wrap"><canvas id="btCalChart"></canvas></div>
+          <div id="btCalNote" class="chart-note"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-tune">
+          <p class="chart-note">
+            Stops the slider-guessing: the app searches past fights for the weights
+            that worked best — but only on an <b>earlier "train" slice</b>, then
+            grades them on a <b>later "test" slice it never saw</b>. The test number
+            is the only one you trust. A big train→test drop is <b>overfitting</b> —
+            the thing that bankrupts people who skip this step.
+          </p>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Optimize for
+              <select id="tuneObjective">
+                <option value="roi">Profit (ROI)</option>
+                <option value="log_loss">Prediction accuracy</option>
+              </select>
+            </label>
+            <label class="bt-field">Train split
+              <input id="tuneTrain" type="number" min="30" max="90" step="5" value="70" /> %
+            </label>
+            <label class="bt-field">Min edge
+              <input id="tuneEdge" type="number" min="0" max="50" step="0.5" value="2" /> %
+            </label>
+            <button id="tuneRun" class="btn primary" type="button">Run auto-tune</button>
+            <span id="tuneMsg" class="hint"></span>
+          </div>
+          <div id="tuneScorecard" class="bt-scorecard"></div>
+          <div class="chart-wrap"><canvas id="tuneChart"></canvas></div>
+          <div id="tuneChartNote" class="chart-note"></div>
+        </div>
+
+        <div class="tab-panel" id="tab-value">
+          <p class="chart-note">
+            The honest edge: not out-predicting the market, but finding a book that
+            <b>overpays vs the sharp line</b> (Pinnacle). Each flagged bet pays more
+            than its true probability deserves — <b>+EV</b>. Stakes are suggested as
+            small round numbers and books tagged, to keep you under the limit radar.
+            <br><span class="warn-text">⚠ Each scan spends Odds API requests
+            (~1 per league × regions). Free tier = 500/month — scan deliberately.</span>
+          </p>
+          <details class="books-filter" id="booksFilter">
+            <summary>⚙ My books — filter results to the books you actually use</summary>
+            <p class="chart-note">Check the books you have accounts at (offshore/lowkey ones included). Scans then only show bets you can actually place. Pinnacle stays as the fair-line reference. Leave all unchecked to show every book.</p>
+            <div id="booksList" class="books-list"></div>
+            <div class="books-actions">
+              <button id="booksSave" class="btn" type="button">Save my books</button>
+              <button id="booksClear" class="btn ghost" type="button">Clear (show all)</button>
+              <span id="booksMsg" class="hint"></span>
+            </div>
+          </details>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Sport
+              <select id="valSport">
+                {% for s in sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="bt-field">Min EV
+              <input id="valEv" type="number" min="0" max="50" step="0.5" value="2" /> %
+            </label>
+            <label class="bt-field">Regions
+              <select id="valRegions">
+                <option value="us,eu">us,eu (incl. Pinnacle — recommended)</option>
+                <option value="us">us only (cheaper, no Pinnacle)</option>
+                <option value="us,us2,eu,uk">us,us2,eu,uk (widest, costliest)</option>
+              </select>
+            </label>
+            <label class="bt-field">Max leagues
+              <input id="valMaxKeys" type="number" min="1" max="12" step="1" value="4" />
+            </label>
+            <button id="valRun" class="btn primary" type="button">Run scan</button>
+            <span id="valMsg" class="hint"></span>
+          </div>
+          <div id="valSummary" class="chart-note"></div>
+          <div id="valTable" class="bets-table-wrap"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-clv">
+          <p class="chart-note">
+            <b>Closing Line Value (CLV)</b> is the truest test of whether you're
+            actually sharp — more reliable than win/loss, which is mostly luck in
+            small samples. If you consistently get <b>better odds than the line
+            closes at</b>, you're beating the market and profit follows long-term.
+            Log a bet (Bet Log tab), then record what it <b>closed</b> at here.
+            <br><span class="warn-text">Manual entry is free. “Auto” pulls the
+            current line from the API (costs 1 request) — use it near event start.</span>
+          </p>
+          <div id="clvScorecard" class="bt-scorecard"></div>
+          <div id="clvTable" class="bets-table-wrap"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-arb">
+          <p class="chart-note">
+            <b>Arbitrage</b> = the books disagree enough that you can bet <b>every</b>
+            outcome at different books and win the same no matter what. Guaranteed
+            profit, zero prediction. The catch: arbs are small and vanish in seconds,
+            you need money sitting at multiple books, and hammering them is the
+            <b>fastest way to get limited</b> — bet modestly and not every one.
+            <br><span class="warn-text">⚠ Each scan spends Odds API requests (~1 per league × regions).</span>
+            <br>Uses your <b>My books</b> selection from the Value Finder tab — arb legs only count books you can actually bet at.
+          </p>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Sport
+              <select id="arbSport">
+                {% for s in sports %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+              </select>
+            </label>
+            <label class="bt-field">Total stake $
+              <input id="arbStake" type="number" min="1" step="10" value="100" />
+            </label>
+            <label class="bt-field">Min profit
+              <input id="arbMinProfit" type="number" min="0" max="50" step="0.25" value="0" /> %
+            </label>
+            <label class="bt-field">Regions
+              <select id="arbRegions">
+                <option value="us,eu">us,eu (recommended)</option>
+                <option value="us">us only</option>
+                <option value="us,us2,eu,uk">us,us2,eu,uk (widest)</option>
+              </select>
+            </label>
+            <label class="bt-field">Max leagues
+              <input id="arbMaxKeys" type="number" min="1" max="12" step="1" value="4" />
+            </label>
+            <button id="arbRun" class="btn primary" type="button">Run scan</button>
+            <span id="arbMsg" class="hint"></span>
+          </div>
+          <div id="arbSummary" class="chart-note"></div>
+          <div id="arbResults"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-promo">
+          <p class="chart-note">
+            <b>Matched betting</b> turns a book's free bet / bonus into near-guaranteed
+            cash: you <b>back</b> a pick at the book and <b>lay</b> it on an exchange
+            (e.g. Betfair) so every result is covered. Enter the numbers to see your
+            optimal lay and the locked profit. <b>Odds are decimal</b> (2.00 = +100).
+            This is a calculator — it spends no API requests.
+          </p>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Bet type
+              <select id="promoType">
+                <option value="free_snr">Free bet (stake not returned)</option>
+                <option value="qualifying">Qualifying bet (real money)</option>
+              </select>
+            </label>
+            <label class="bt-field">Back odds
+              <input id="promoBack" type="number" min="1" step="0.01" value="5.0" />
+            </label>
+            <label class="bt-field">Lay odds
+              <input id="promoLay" type="number" min="1" step="0.01" value="5.2" />
+            </label>
+            <label class="bt-field">Stake $
+              <input id="promoStake" type="number" min="0" step="5" value="10" />
+            </label>
+            <label class="bt-field">Exchange commission
+              <input id="promoComm" type="number" min="0" max="20" step="0.5" value="2" /> %
+            </label>
+            <button id="promoRun" class="btn primary" type="button">Calculate</button>
+          </div>
+          <div id="promoResult" class="bt-scorecard"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-pickem">
+          <p class="chart-note">
+            For <b>DraftKings Pick6 / Betr</b>-style apps. You pick player props
+            over/under; an entry pays a fixed multiplier if <b>all</b> legs hit.
+            For each leg, enter the same prop's <b>over/under odds from a sharp book</b>
+            (DraftKings, Pinnacle, etc.) — we de-vig them to each leg's true hit
+            chance, then compute the whole entry's EV. <b>Stack legs that each beat
+            the sharp line</b> and the entry turns +EV.
+          </p>
+          <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+            <label class="bt-field">Payout multiplier
+              <input id="pkMult" type="number" min="1" step="0.1" value="3" />
+            </label>
+            <span class="hint">DK Pick6 (Power): 2-pick ≈3×, 3-pick ≈6×, 4-pick ≈10×, 5-pick ≈20× — use your app's actual number.</span>
+          </div>
+          <div id="pkLegs"></div>
+          <div class="row" style="gap:10px;margin-top:10px">
+            <button id="pkAddLeg" class="btn ghost" type="button">＋ Add leg</button>
+            <button id="pkCalc" class="btn primary" type="button">Calculate entry</button>
+            <span id="pkMsg" class="hint"></span>
+          </div>
+          <div id="pkResult" class="bt-scorecard"></div>
+        </div>
+
+        <div class="tab-panel hidden" id="tab-sweeps">
+          <p class="chart-note">
+            For <b>sweeps / social books</b> (Fliff, Rebet, Thrillz, Dogg House,
+            Courtside, Bracco). No odds feed covers these, so you check them by hand.
+          </p>
+          <div class="sweeps-card">
+            <div class="bt-section-label">Is my line +EV?</div>
+            <p class="chart-note" style="margin-top:0">Read the odds off your sweeps book, then the same bet's odds (both sides) off a sharp book. All American.</p>
+            <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+              <label class="bt-field">Your book's odds
+                <input id="swYour" type="text" inputmode="numeric" placeholder="+150" />
+              </label>
+              <label class="bt-field">Sharp: your side
+                <input id="swRefSide" type="text" inputmode="numeric" placeholder="+120" />
+              </label>
+              <label class="bt-field">Sharp: other side
+                <input id="swRefOther" type="text" inputmode="numeric" placeholder="-140" />
+              </label>
+              <label class="bt-field">Stake $
+                <input id="swStake" type="number" min="1" step="5" value="50" />
+              </label>
+              <button id="swCheck" class="btn primary" type="button">Check</button>
+            </div>
+            <div id="swEvResult" class="bt-scorecard"></div>
+          </div>
+          <div class="sweeps-card">
+            <div class="bt-section-label">What's a sweeps bonus worth?</div>
+            <p class="chart-note" style="margin-top:0">Estimate the real-cash value of free Sweeps Coins after play-through.</p>
+            <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+              <label class="bt-field">Sweeps Coins
+                <input id="swSc" type="number" min="0" step="1" value="50" />
+              </label>
+              <label class="bt-field">Play-through ×
+                <input id="swPlay" type="number" min="0" step="1" value="1" />
+              </label>
+              <label class="bt-field">Edge per wager
+                <input id="swEdge" type="number" min="0" max="20" step="0.5" value="4.5" /> %
+              </label>
+              <button id="swBonus" class="btn primary" type="button">Value it</button>
+            </div>
+            <div id="swBonusResult" class="bt-scorecard"></div>
+          </div>
+        </div>
+      </section>
+  </main>
+  </div><!-- /#section-sports -->
+
+  <!-- ===== Stocks / options ===== -->
+  <div class="section hidden" id="section-stocks">
+    <div class="crypto-tabs" id="stockTabs">
+      <button class="ctab active" data-stab="calc" type="button">🧮 Strategy Calculator</button>
+      <button class="ctab" data-stab="chain" type="button">⛓ Options Chain</button>
+      <button class="ctab" data-stab="insider" type="button">📋 Insider Buys</button>
+    </div>
+
+    <div class="cpanel" id="spanel-calc">
+    <div class="main-stack">
+      <section class="card">
+        <h2>🧮 Options Strategy Calculator</h2>
+        <p class="hint">The popular Robinhood plays, with honest numbers — max profit,
+          max loss, breakeven, return, annualized return, and a rough probability of
+          profit (from IV). Pull real strikes/premiums from the <b>Options Chain</b> tab
+          (click a contract to autofill). Pure math, no quota.</p>
+        <label>Strategy</label>
+        <select id="ocStrategy">
+          <optgroup label="Income (the wheel)">
+            <option value="covered_call">Covered call</option>
+            <option value="cash_secured_put">Cash-secured put</option>
+          </optgroup>
+          <optgroup label="Directional">
+            <option value="long_call">Long call</option>
+            <option value="long_put">Long put</option>
+          </optgroup>
+          <optgroup label="Defined-risk spreads">
+            <option value="bull_call">Bull call (debit)</option>
+            <option value="bear_put">Bear put (debit)</option>
+            <option value="bull_put">Bull put (credit)</option>
+            <option value="bear_call">Bear call (credit)</option>
+          </optgroup>
+        </select>
+        <div class="row" style="gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">
+          <span id="ocSingle" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <label class="bt-field">Stock price <input id="ocStock" type="number" step="0.01" placeholder="100" /></label>
+            <label class="bt-field">Strike <input id="ocStrike" type="number" step="0.01" placeholder="105" /></label>
+          </span>
+          <span id="ocSpread" style="display:none;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <label class="bt-field">Strike A <input id="ocStrikeA" type="number" step="0.01" placeholder="100" /></label>
+            <label class="bt-field">Strike B <input id="ocStrikeB" type="number" step="0.01" placeholder="105" /></label>
+          </span>
+          <label class="bt-field">Premium <input id="ocPremium" type="number" step="0.01" placeholder="2.00" /></label>
+          <label class="bt-field">Contracts <input id="ocContracts" type="number" min="1" step="1" value="1" /></label>
+          <label class="bt-field">Days to exp <input id="ocDays" type="number" min="1" step="1" placeholder="30" /></label>
+          <label class="bt-field">IV % <input id="ocIv" type="number" min="0" step="1" placeholder="40" /></label>
+          <button id="ocCalc" class="btn primary" type="button">Calculate</button>
+        </div>
+        <div id="ocResult" class="bt-scorecard"></div>
+      </section>
+    </div>
+    </div>
+
+    <div class="cpanel hidden" id="spanel-chain">
+    <div class="main-stack">
+      <section class="card">
+        <h2>⛓ Options Chain</h2>
+        <p class="hint">Live (delayed) chain from CBOE — IV, delta, volume, open interest.
+          Click any contract's <b>↗</b> to send its strike + price into the calculator. Free, no quota.</p>
+        <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <label class="bt-field">Ticker <input id="chTicker" type="text" placeholder="AAPL" autocomplete="off" /></label>
+          <label class="bt-field">Expiry <select id="chExpiry"></select></label>
+          <button id="chLoad" class="btn primary" type="button">Load chain</button>
+          <span id="chMsg" class="hint"></span>
+        </div>
+        <div id="chQuote" class="chart-note"></div>
+        <div id="chTables" class="ch-tables"></div>
+      </section>
+    </div>
+    </div>
+
+    <div class="cpanel hidden" id="spanel-insider">
+    <div class="main-stack">
+      <section class="card">
+        <h2>📋 Insider Buys</h2>
+        <p class="hint">The stock market's "smart money": when a company's own
+          executives/directors <b>buy their stock on the open market</b> with their own
+          money (Form 4 code <b>P</b>), it's a real bullish tell — they know the business.
+          <b>Sells and grants are noise</b> (taxes, diversification, comp) so we score
+          buys separately. Free SEC EDGAR data, no quota.</p>
+        <div class="row" style="gap:10px;align-items:flex-end;flex-wrap:wrap">
+          <label class="bt-field">Ticker <input id="insTicker" type="text" placeholder="e.g. GME" autocomplete="off" /></label>
+          <button id="insLoad" class="btn primary" type="button">Look up insiders</button>
+          <span id="insMsg" class="hint"></span>
+        </div>
+        <div id="insSummary" class="bt-scorecard"></div>
+        <div id="insTable" class="bets-table-wrap"></div>
+      </section>
+    </div>
+    </div>
+  </div>
+
+  <!-- ===== Crypto / meme coins ===== -->
+  <div class="section hidden" id="section-crypto">
+    <div class="crypto-tabs" id="cryptoTabs">
+      <button class="ctab active" data-ctab="screener" type="button">🔥 Screener</button>
+      <button class="ctab" data-ctab="safety" type="button">🛡 Safety Check</button>
+      <button class="ctab" data-ctab="whale" type="button">🐋 Whale Tracker</button>
+      <button class="ctab" data-ctab="discover" type="button">🔎 Discover</button>
+    </div>
+
+    <div class="cpanel hidden" id="cpanel-discover">
+    <div class="main-stack">
+      <section class="card">
+        <h2>🔎 Smart-Wallet Discovery</h2>
+        <p class="hint">Point it at a token that <b>already pumped</b> — it finds the
+          wallets that bought it <b>early, from the pool, before the run</b>. Do this
+          across several winners and the wallets that keep showing up early rise to the
+          top of the leaderboard below = your smart money. Then <b>Track</b> them (feeds
+          the Whale Tracker). EVM needs your free Etherscan key (set it in the Whale
+          Tracker tab). <b>Honest:</b> early ≠ smart on one token (could be luck) — the
+          signal is being early across <i>many</i> winners.</p>
+        <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <label class="bt-field" style="flex:1 1 280px">Winning token address
+            <input id="discAddr" type="text" placeholder="contract of a token that pumped" autocomplete="off" />
+          </label>
+          <label class="bt-field">Chain
+            <select id="discChain">
+              <option value="ethereum">Ethereum</option>
+              <option value="base">Base</option>
+              <option value="bsc">BSC</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="solana">Solana (experimental)</option>
+            </select>
+          </label>
+          <button id="discRun" class="btn primary" type="button">Find early buyers</button>
+          <span id="discMsg" class="hint"></span>
+        </div>
+        <div id="discResult"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>🏆 Smart-Money Leaderboard</h2>
+          <button id="discClear" class="btn ghost" type="button">Clear</button>
+        </div>
+        <p class="hint">Wallets ranked by how many of your analyzed winners they were early on. The repeat offenders are the ones worth tracking.</p>
+        <div id="discLeaderboard" class="report-empty">Analyze a few winning tokens to build your leaderboard.</div>
+      </section>
+    </div>
+    </div>
+
+    <div class="cpanel hidden" id="cpanel-whale">
+    <div class="main-stack">
+      <section class="card">
+        <h2>🐋 Whale Tracker</h2>
+        <p class="hint">Follow wallets that are early and right. Add wallet addresses
+          (from a token's top holders, a smart-money list, wherever) and see a live
+          feed of what they're <b>buying</b> and <b>selling</b> — with <b>convergence</b>
+          flagged when several of your wallets pile into the same token. Free data
+          (Etherscan for EVM, Helius for Solana). It follows wallets <i>you</i> pick;
+          curate the list — garbage in, garbage out.</p>
+
+        <details class="books-filter" id="whaleKeys">
+          <summary>⚙ Free API keys (needed once)</summary>
+          <p class="chart-note" style="margin-top:0">Grab free keys:
+            <a href="https://etherscan.io/apis" target="_blank" rel="noopener">etherscan.io</a> (one key covers ETH/Base/BSC/Arbitrum) ·
+            <a href="https://helius.dev" target="_blank" rel="noopener">helius.dev</a> (Solana). Saved locally to <code>.env</code>.</p>
+          <div class="row" style="gap:10px;flex-wrap:wrap">
+            <label class="bt-field">Etherscan key <input id="whaleEthKey" type="password" placeholder="EVM key" autocomplete="off" /></label>
+            <label class="bt-field">Helius key <input id="whaleHelKey" type="password" placeholder="Solana key" autocomplete="off" /></label>
+            <button id="whaleSaveKeys" class="btn" type="button">Save keys</button>
+            <span id="whaleKeyStatus" class="hint"></span>
+          </div>
+        </details>
+
+        <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <label class="bt-field" style="flex:1 1 280px">Wallet address
+            <input id="whaleAddr" type="text" placeholder="0x… or Solana address" autocomplete="off" />
+          </label>
+          <label class="bt-field">Chain
+            <select id="whaleChain">
+              <option value="ethereum">Ethereum</option>
+              <option value="solana">Solana</option>
+              <option value="base">Base</option>
+              <option value="bsc">BSC</option>
+              <option value="arbitrum">Arbitrum</option>
+              <option value="polygon">Polygon</option>
+            </select>
+          </label>
+          <label class="bt-field">Label
+            <input id="whaleLabel" type="text" placeholder="optional name" autocomplete="off" />
+          </label>
+          <button id="whaleAdd" class="btn" type="button">＋ Add wallet</button>
+        </div>
+        <div id="whaleList" class="whale-list"></div>
+        <div class="row" style="gap:10px;margin-top:12px">
+          <button id="whaleRefresh" class="btn primary" type="button">Refresh activity</button>
+          <span id="whaleMsg" class="hint"></span>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Recent moves</h2>
+        <div id="whaleConvergence"></div>
+        <div id="whaleFeed" class="report-empty">Add wallets and hit <b>Refresh activity</b>.</div>
+      </section>
+    </div>
+    </div>
+
+    <div class="cpanel" id="cpanel-screener">
+      <section class="card">
+        <h2>🔥 Trending Screener</h2>
+        <p class="hint">Tokens being actively promoted right now (DexScreener boosts),
+          with quick risk hints. <b>Trending ≠ good</b> — most are pump-and-dumps.
+          Hit <b>Check</b> on any row for the full rug report. Free, no quota.</p>
+        <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <label class="bt-field">Chain
+            <select id="scrChain">
+              <option value="all">All</option>
+              <option value="solana">Solana</option>
+              <option value="ethereum">Ethereum</option>
+              <option value="base">Base</option>
+              <option value="bsc">BSC</option>
+            </select>
+          </label>
+          <label class="bt-field">Sort by
+            <select id="scrSort">
+              <option value="volume_24h">24h volume</option>
+              <option value="liquidity">Liquidity</option>
+              <option value="price_change_24h">24h change</option>
+              <option value="pair_created_ms">Newest</option>
+            </select>
+          </label>
+          <label class="bt-field">Min liquidity $
+            <input id="scrMinLiq" type="number" min="0" step="1000" value="5000" />
+          </label>
+          <button id="scrRun" class="btn primary" type="button">Run screener</button>
+          <span id="scrMsg" class="hint"></span>
+        </div>
+        <div id="scrResults"></div>
+      </section>
+    </div>
+
+    <div class="cpanel hidden" id="cpanel-safety">
+    <div class="main-stack">
+      <section class="card">
+        <h2>🛡 Token Safety Check</h2>
+        <p class="hint">Meme coins are mostly traps. Before you buy, paste the token's
+          contract address — this checks if it's a <b>honeypot</b> (can't sell), a
+          <b>rug</b> (mint/freeze powers, thin liquidity), or a <b>whale dump</b>
+          waiting to happen. Defense first. It will <b>not</b> tell you a coin is a
+          good buy — nothing can; it tells you if it's an obvious trap. Free, no quota.</p>
+        <label>Chain</label>
+        <select id="cryptoChain">
+          <option value="solana">Solana</option>
+          <option value="ethereum">Ethereum</option>
+          <option value="base">Base</option>
+          <option value="bsc">BSC</option>
+          <option value="arbitrum">Arbitrum</option>
+          <option value="polygon">Polygon</option>
+        </select>
+        <label>Token contract address</label>
+        <input id="cryptoAddr" type="text" placeholder="paste the token address" autocomplete="off" />
+        <button id="cryptoCheck" class="btn primary full">Check token</button>
+        <div id="cryptoMsg" class="msg"></div>
+      </section>
+      <section class="card">
+        <h2>Risk Report</h2>
+        <div id="cryptoReport" class="report-empty">Paste a token address and click <b>Check token</b>.</div>
+      </section>
+    </div><!-- /.main-stack -->
+    </div><!-- /#cpanel-safety -->
+  </div><!-- /#section-crypto -->
+
+  <!-- ===== Academy (curated learning library) ===== -->
+  <div class="section hidden" id="section-academy">
+    <div class="main-stack">
+      <div class="hero-head">
+        <h2>🎓 Money Lab Academy</h2>
+        <p class="sub" id="acTagline"></p>
+      </div>
+      <div class="ac-disclaimer" id="acDisclaimer"></div>
+      <div class="ac-layout">
+        <nav class="ac-toc" id="acToc"></nav>
+        <div class="ac-courses" id="acCourses"></div>
+      </div>
+    </div>
+  </div><!-- /#section-academy -->
+
+  </div><!-- /.content -->
+
+  <script src="{{ url_for('static', filename='chart.umd.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+  <script src="{{ url_for('static', filename='analytics.js') }}"></script>
+  <script src="{{ url_for('static', filename='crypto.js') }}"></script>
+  <script src="{{ url_for('static', filename='stocks.js') }}"></script>
+  <script src="{{ url_for('static', filename='academy.js') }}"></script>
+</body>
+</html>
