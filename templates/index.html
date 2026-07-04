@@ -33,6 +33,7 @@
     </div>
     <nav id="mainNav" class="main-nav">
       <button class="nav-btn active" data-section="sports" type="button">🎯 Sports Betting</button>
+      <button class="nav-btn" data-section="markets" type="button">🔮 Prediction Markets</button>
       <button class="nav-btn" data-section="stocks" type="button">📈 Stocks</button>
       <button class="nav-btn" data-section="crypto" type="button">🪙 Crypto</button>
       <button class="nav-btn" data-section="academy" type="button">🎓 Academy</button>
@@ -423,6 +424,134 @@
   </main>
   </div><!-- /#section-sports -->
 
+  <!-- ===== Prediction Markets (Polymarket + Kalshi) ===== -->
+  <div class="section hidden" id="section-markets">
+    <div class="crypto-tabs" id="marketTabs">
+      <button class="ctab active" data-mtab="trending" type="button">🔥 Trending</button>
+      <button class="ctab" data-mtab="movers" type="button">📈 Big Movers</button>
+      <button class="ctab" data-mtab="smart" type="button">🐋 Smart Money</button>
+      <button class="ctab" data-mtab="watch" type="button">👁 Watchlist</button>
+      <button class="ctab" data-mtab="kalshi" type="button">🟢 Kalshi Lookup</button>
+    </div>
+
+    <!-- Trending -->
+    <div class="cpanel" id="mpanel-trending">
+      <section class="card">
+        <h2>🔥 Trending Markets</h2>
+        <p class="hint">The Polymarket markets the crowd is most active on right now,
+          by 24-hour traded volume. <b>YES</b> is the market's implied probability of
+          the event happening. Use it to see what's hot, then dig into a market's
+          <b>🐋 whales</b> to see where the size is going. Free public data, no quota.</p>
+        <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <label class="bt-field">Min 24h volume $
+            <input id="trMinVol" type="number" min="0" step="1000" value="0" />
+          </label>
+          <button id="trRun" class="btn primary" type="button">Refresh</button>
+          <span id="trMsg" class="hint"></span>
+        </div>
+        <div id="trResults" class="report-empty">Click <b>Refresh</b> to load trending markets.</div>
+      </section>
+    </div>
+
+    <!-- Big movers -->
+    <div class="cpanel hidden" id="mpanel-movers">
+      <section class="card">
+        <h2>📈 Big Movers</h2>
+        <p class="hint">The biggest <b>24-hour price swings</b> — filtered to markets
+          with real volume, so you're seeing moves big money actually backed, not thin-market
+          noise. A sharp move on a liquid market means <b>something changed</b> (news, a
+          large bettor taking a side). That's your cue to look closer — check the whales,
+          and decide if the new price is right or an overreaction you can fade.</p>
+        <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <label class="bt-field">Min 24h volume $
+            <input id="mvMinVol" type="number" min="0" step="5000" value="25000" />
+          </label>
+          <button id="mvRun" class="btn primary" type="button">Refresh</button>
+          <span id="mvMsg" class="hint"></span>
+        </div>
+        <div id="mvResults" class="report-empty">Click <b>Refresh</b> to load the biggest moves.</div>
+      </section>
+    </div>
+
+    <!-- Smart money -->
+    <div class="cpanel hidden" id="mpanel-smart">
+    <div class="main-stack">
+      <section class="card">
+        <h2>🐋 Smart Money — biggest trades now</h2>
+        <p class="hint">The largest single trades hitting Polymarket across every market
+          in the recent window. Big size is the closest thing to a "smart money" tell on a
+          prediction market — follow what the whales are <b>buying</b>. Click 🔍 on any
+          market you opened from Trending/Movers to see that one market's trades and which
+          side the money is leaning.</p>
+        <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+          <label class="bt-field">Min trade size $
+            <input id="btMinUsd" type="number" min="0" step="500" value="1000" />
+          </label>
+          <button id="btRunPm" class="btn primary" type="button">Refresh feed</button>
+          <span id="btMsgPm" class="hint"></span>
+        </div>
+        <div id="btResults" class="bets-table-wrap"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>🏆 Big-Money Wallets</h2>
+          <button id="lbRun" class="btn ghost" type="button">Refresh</button>
+        </div>
+        <p class="hint">Wallets ranked by money traded in the recent window. A wallet that
+          <b>keeps</b> showing up with size is worth following — one big trade could be luck.
+          Click 🔗 to open a wallet's full position history on Polymarket.</p>
+        <div id="lbResults" class="report-empty">Click <b>Refresh</b> to rank the big players.</div>
+      </section>
+
+      <section class="card hidden" id="oneMarketCard">
+        <div class="card-head">
+          <h2 id="oneMarketTitle">Market trades</h2>
+          <button id="oneMarketClose" class="btn ghost" type="button">✕</button>
+        </div>
+        <div id="oneMarketBody"></div>
+      </section>
+    </div>
+    </div>
+
+    <!-- Watchlist -->
+    <div class="cpanel hidden" id="mpanel-watch">
+      <section class="card">
+        <div class="card-head">
+          <h2>👁 Watchlist — price over time</h2>
+          <button id="wlSnap" class="btn primary" type="button">📸 Snapshot now</button>
+        </div>
+        <p class="hint">Track markets you care about and watch how their price drifts.
+          Hit <b>Track</b> on any market in Trending / Big Movers to add it here. Each
+          <b>Snapshot</b> records the current YES price; over time you get a line you can
+          read for momentum — a market quietly climbing before the crowd notices is exactly
+          the edge you're hunting. Stored locally in <code>pm_watchlist.json</code>.</p>
+        <div id="wlMsg" class="hint"></div>
+        <div id="wlResults" class="report-empty">Nothing tracked yet — add markets from Trending or Big Movers.</div>
+      </section>
+    </div>
+
+    <!-- Kalshi lookup -->
+    <div class="cpanel hidden" id="mpanel-kalshi">
+      <section class="card">
+        <h2>🟢 Kalshi Market Lookup</h2>
+        <p class="hint">Kalshi's public API has no "trending" feed (its hot markets aren't
+          queryable without their internal ranking), so browse them on
+          <a href="https://kalshi.com/markets" target="_blank" rel="noopener">kalshi.com/markets</a>,
+          grab a market's <b>ticker</b> (it's in the URL, e.g. <code>KXBTCD-25</code>), and paste
+          it here for the live YES price, spread, volume and open interest. Free, no quota.</p>
+        <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+          <label class="bt-field" style="flex:1 1 240px">Kalshi ticker
+            <input id="kalTicker" type="text" placeholder="e.g. KXBTCD-25DEC31-B100000" autocomplete="off" />
+          </label>
+          <button id="kalRun" class="btn primary" type="button">Look up</button>
+          <span id="kalMsg" class="hint"></span>
+        </div>
+        <div id="kalResult" class="report-empty">Paste a Kalshi ticker and click <b>Look up</b>.</div>
+      </section>
+    </div>
+  </div><!-- /#section-markets -->
+
   <!-- ===== Stocks / options ===== -->
   <div class="section hidden" id="section-stocks">
     <div class="crypto-tabs" id="stockTabs">
@@ -708,6 +837,7 @@
   <script src="{{ url_for('static', filename='analytics.js') }}"></script>
   <script src="{{ url_for('static', filename='crypto.js') }}"></script>
   <script src="{{ url_for('static', filename='stocks.js') }}"></script>
+  <script src="{{ url_for('static', filename='markets.js') }}"></script>
   <script src="{{ url_for('static', filename='academy.js') }}"></script>
 </body>
 </html>

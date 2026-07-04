@@ -51,6 +51,7 @@ import options_calc
 import stock_data
 import insider
 import academy
+import prediction_markets
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True  # pick up index.html edits without a restart
@@ -801,6 +802,93 @@ def api_stocks_insider():
     if err:
         return jsonify({"error": err}), 502
     return jsonify(rep)
+
+
+# --------------------------------------------------------------------------- #
+# Prediction markets (Polymarket + Kalshi) — free public data, no quota
+# --------------------------------------------------------------------------- #
+def _fnum(raw, default):
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+@app.route("/api/markets/trending", methods=["GET"])
+def api_markets_trending():
+    min_vol = max(0.0, _fnum(request.args.get("min_vol"), 0.0))
+    try:
+        return jsonify(prediction_markets.trending(limit=40, min_vol=min_vol))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": f"Polymarket unreachable: {e}"}), 502
+
+
+@app.route("/api/markets/movers", methods=["GET"])
+def api_markets_movers():
+    min_vol = max(0.0, _fnum(request.args.get("min_vol"), 25000.0))
+    try:
+        return jsonify(prediction_markets.movers(limit=40, min_vol=min_vol))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": f"Polymarket unreachable: {e}"}), 502
+
+
+@app.route("/api/markets/trades", methods=["GET"])
+def api_markets_trades():
+    cid = request.args.get("id", "")
+    min_usd = max(0.0, _fnum(request.args.get("min_usd"), 0.0))
+    try:
+        return jsonify(prediction_markets.market_trades(cid, limit=80, min_usd=min_usd))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/markets/big_trades", methods=["GET"])
+def api_markets_big_trades():
+    min_usd = max(0.0, _fnum(request.args.get("min_usd"), 1000.0))
+    try:
+        return jsonify(prediction_markets.big_trades(limit=60, min_usd=min_usd))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": f"Polymarket unreachable: {e}"}), 502
+
+
+@app.route("/api/markets/leaderboard", methods=["GET"])
+def api_markets_leaderboard():
+    try:
+        return jsonify(prediction_markets.leaderboard(top=25))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": f"Polymarket unreachable: {e}"}), 502
+
+
+@app.route("/api/markets/kalshi", methods=["GET"])
+def api_markets_kalshi():
+    try:
+        return jsonify(prediction_markets.kalshi_market(request.args.get("ticker", "")))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/markets/watch", methods=["GET"])
+def api_markets_watch_get():
+    return jsonify(prediction_markets.watch_view())
+
+
+@app.route("/api/markets/watch", methods=["POST"])
+def api_markets_watch_add():
+    market = request.get_json(silent=True) or {}
+    try:
+        return jsonify(prediction_markets.watch_add(market))
+    except prediction_markets.MarketError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.route("/api/markets/watch/snapshot", methods=["POST"])
+def api_markets_watch_snapshot():
+    return jsonify(prediction_markets.watch_snapshot())
+
+
+@app.route("/api/markets/watch/<path:market_id>", methods=["DELETE"])
+def api_markets_watch_delete(market_id):
+    return jsonify(prediction_markets.watch_remove(market_id))
 
 
 # --------------------------------------------------------------------------- #

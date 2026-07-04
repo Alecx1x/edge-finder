@@ -88,7 +88,7 @@ $("saveSupabase").addEventListener("click", async () => {
 // --------------------------------------------------------------------------- //
 (function () {
   const nav = $("mainNav"), toggle = $("navToggle");
-  const sections = ["sports", "stocks", "crypto", "academy"];
+  const sections = ["sports", "markets", "stocks", "crypto", "academy"];
   function show(sec) {
     sections.forEach((s) => $("section-" + s).classList.toggle("hidden", s !== sec));
     [...nav.querySelectorAll(".nav-btn")].forEach((b) =>

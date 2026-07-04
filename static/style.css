@@ -538,3 +538,25 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .ac-toc { position: static; flex-direction: row; flex-wrap: wrap; }
   .ac-toc-link { font-size: 11.5px; padding: 5px 8px; }
 }
+
+/* ===== Prediction Markets section ===== */
+.pm-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pm-table th, .pm-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.pm-table th.num, .pm-table td.num { text-align: right; white-space: nowrap; }
+.pm-table thead th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.pm-table tbody tr:hover { background: rgba(255,255,255,.025); }
+.pm-q { max-width: 460px; }
+.pm-q a { color: var(--text, #e6e8ee); text-decoration: none; }
+.pm-q a:hover { color: var(--cyan); text-decoration: underline; }
+.pm-actions { white-space: nowrap; text-align: right; }
+.pm-actions .btn { padding: 4px 8px; font-size: 12px; margin-left: 4px; }
+.pm-lean { background: rgba(52,211,153,.07); border: 1px solid rgba(52,211,153,.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 13px; }
+.pm-lean.dim { background: rgba(255,255,255,.03); border-color: var(--border); }
+.pm-whale { background: rgba(57,211,224,.06); border: 1px solid rgba(57,211,224,.25); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 13px; }
+.pm-watch-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.pm-watch-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.pm-watch-head a { color: var(--text, #e6e8ee); text-decoration: none; font-weight: 600; }
+.pm-watch-head a:hover { color: var(--cyan); }
+.pm-watch-meta { color: var(--muted); font-size: 12px; margin: 4px 0 8px; }
+.pm-watch-spark { height: 120px; }
+#oneMarketCard .card-head { display: flex; justify-content: space-between; align-items: center; }
